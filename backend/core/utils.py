@@ -53,12 +53,12 @@ class SpotifyAuth:
     def authenticate_user(cls, code):
         tokens = cls.exchange_code_for_tokens(code)
         profile = cls.fetch_user_profile(tokens["access_token"])
-        expiry = datetime.now() + timedelta(seconds=tokens["expires_in"])
+        expiry = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
         user = AppUser.objects.create_or_login_user(
             spotify_id=profile["id"],
             favourite_genres=[],
             favourite_artists=[],
-            favourite_tracks=[],
+            favourite_tracks=[[],[],[]],
             access_token=tokens["access_token"],
             refresh_token=tokens["refresh_token"],
             token_expiry=expiry,
@@ -99,8 +99,8 @@ class SpotifyAuth:
         return response.json()['items']
     #gather a user's favourite genres from their top artists
     @classmethod
-    def fetch_user_favourite_genres(cls, user, time_range=0):
-        tracks= cls.fetch_user_favourite_tracks(user,time_range=0) 
+    def fetch_user_favourite_genres(cls, user):
+        tracks= cls.fetch_user_favourite_tracks(user) 
         if user.stats_retrieved_date and (datetime.now(timezone.utc) - user.stats_retrieved_date).days < 7:
             return user.favourite_genres, user.favourite_artists,tracks
         artists = cls.fetch_user_favourite_artists(user)
@@ -116,32 +116,41 @@ class SpotifyAuth:
         user.save()
         return favourite_genres,artists,tracks
     @classmethod
-    def fetch_user_favourite_tracks(cls, user,time_range):
-    
+    def fetch_user_favourite_tracks(cls, user):
         #time_range: 0=short_term, 1=medium_term, 2=long_term
         #checks if data is needed to be fetched from spotify, if not returns cached data, otherwise fetches from spotify and updates the user model
-        if time_range==0 and user.favourite_tracks !=[None] and len(user.favourite_tracks)>time_range and (datetime.now(timezone.utc) - datetime.fromisoformat(user.favourite_tracks[0][1])).days < 7:
-            return user.favourite_tracks[0][0]
-        elif time_range==1 and user.favourite_tracks!=[None] and  len(user.favourite_tracks)>time_range and (datetime.now(timezone.utc) - datetime.fromisoformat(user.favourite_tracks[1][1])).days < 30:
-            return user.favourite_tracks[1][0]
-        elif time_range==2 and user.favourite_tracks!=[None] and  len(user.favourite_tracks)>time_range and (datetime.now(timezone.utc) - datetime.fromisoformat(user.favourite_tracks[2][1])).days < 112:
-            return user.favourite_tracks[2][0]
-        else:
-            access_token = cls.get_valid_access_token(user)
-            headers = {"Authorization": f"Bearer {access_token}"}
-            time_range_str = ["short_term", "medium_term", "long_term"][time_range]
-            response = requests.get(f"{cls.PROFILE_URL}/top/tracks", headers=headers, params={"limit":50, "time_range":time_range_str})
-            if response.status_code != 200:
-                raise Exception("Failed to fetch user's top tracks")
-            tracks = response.json()['items']
+        cls.check_user_stats(user)
+        return user.favourite_tracks
+        
+       
+    @classmethod
+    def check_user_stats(cls, user):
+        days=[7,30,112]
+        time_range_str=["short_term","medium_term","long_term"]
+        if len(user.favourite_tracks)==3:
+            for i in range(3):
+              if (user.favourite_tracks[i] ==[]) or ((datetime.now(timezone.utc) - datetime.fromisoformat(user.favourite_tracks[i][1])).days > days[i]):
+                    #refreshes tracks list
+                    access_token = cls.get_valid_access_token(user)
+                    headers = {"Authorization": f"Bearer {access_token}"}
+                    response = requests.get(f"{cls.PROFILE_URL}/top/tracks", headers=headers, params={"limit":50, "time_range":time_range_str[i]})
+                    if response.status_code != 200:
+                        raise Exception("Failed to fetch user's top tracks")
+                    new_tracks = [[[track['name'], track['artists'][0]['name'], track['album']['images'][0]['url']] for track in response.json()['items']], datetime.now(timezone.utc).isoformat()]
+                    user.favourite_tracks[i] = new_tracks
+                    user.save()
+      
+
+
+                    
             
-            new_tracks = [[[track['name'], track['artists'][0]['name'], track['album']['images'][0]['url']] for track in tracks], datetime.now(timezone.utc).isoformat()]
-            if user.favourite_tracks==[None] or len(user.favourite_tracks)<=time_range:
-                user.favourite_tracks.append(new_tracks)
-            else:
-                user.favourite_tracks[time_range] = new_tracks
-            user.save()
-            return user.favourite_tracks[time_range][0]
+        
+      
+
+                    
+
+            
+        
 
             
 
@@ -163,10 +172,11 @@ class AppUserUtils:
     @classmethod
     def get_user_stats(cls, user):
         favourite_genres, favourite_artists,favourite_tracks = SpotifyAuth.fetch_user_favourite_genres(user)
+        favourite_tracks=[track[:-1] for track in favourite_tracks]
         return {
             "favourite_genres": favourite_genres,
             "favourite_artists": favourite_artists,
-            "favourite_tracks": favourite_tracks
+            "favourite_tracks": favourite_tracks,
         }
     
 
