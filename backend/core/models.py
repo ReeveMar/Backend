@@ -38,6 +38,7 @@ class AppUser(AbstractBaseUser, PermissionsMixin):
     token_expiry= models.DateTimeField()
     favourite_genres= JSONField(blank=True,default=list)
     favourite_artists= JSONField(blank=True,default=list)
+    favourite_tracks= JSONField(blank=True,default=list)
     stats_retrieved_date= models.DateTimeField(null=True, blank=True)
     REQUIRED_FIELDS = []
     USERNAME_FIELD = 'spotify_id'

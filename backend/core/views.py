@@ -46,24 +46,14 @@ class RefreshTokenView(APIView):
 
         except Exception:
             return Response({"error": "Invalid refresh token"}, status=400)
-#directs to home
-class DisplayUserView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request):
-        print("Authenticated user:", request.user)
-        user= request.user
-        data= {
-            "spotify_id": user.spotify_id,
-            "favourite_genres": user.favourite_genres,
-        }
-        return Response(data)
 #directs to stats page
-class DisplayUserStatsView():  
+class DisplayUserStatsView(APIView):  
     permission_classes = [IsAuthenticated]
     def get(self, request):
         user= request.user
         stats= AppUserUtils.get_user_stats(user)
         return Response(stats)
+
 #directs to logout
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
