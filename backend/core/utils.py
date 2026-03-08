@@ -10,7 +10,7 @@ class SpotifyAuth:
     AUTH_URL = "https://accounts.spotify.com/authorize"
     TOKEN_URL = "https://accounts.spotify.com/api/token"
     PROFILE_URL = "https://api.spotify.com/v1/me"
-    SCOPES = "user-read-private%20user-read-email%20playlist-read-private%20playlist-read-collaborative%20playlist-modify-public%20playlist-modify-private%20user-top-read"
+    SCOPES = "user-read-private%20user-read-email%20playlist-read-private%20playlist-read-collaborative%20playlist-modify-public%20playlist-modify-private%20user-top-read%20user-library-read%20user-read-recently-played"
     
     #generate the url to redirect user to spotify's auth page
     @classmethod
@@ -130,35 +130,17 @@ class SpotifyAuth:
         if len(user.favourite_tracks)==3:
             for i in range(3):
               if (user.favourite_tracks[i] ==[]) or ((datetime.now(timezone.utc) - datetime.fromisoformat(user.favourite_tracks[i][1])).days > days[i]):
+                    
                     #refreshes tracks list
                     access_token = cls.get_valid_access_token(user)
                     headers = {"Authorization": f"Bearer {access_token}"}
                     response = requests.get(f"{cls.PROFILE_URL}/top/tracks", headers=headers, params={"limit":50, "time_range":time_range_str[i]})
                     if response.status_code != 200:
                         raise Exception("Failed to fetch user's top tracks")
-                    new_tracks = [[[track['name'], track['artists'][0]['name'], track['album']['images'][0]['url']] for track in response.json()['items']], datetime.now(timezone.utc).isoformat()]
+                    new_tracks = [[[track['name'], track['artists'][0]['name'], track['album']['images'][0]['url'],track["id"]] for track in response.json()['items']], datetime.now(timezone.utc).isoformat()]
                     user.favourite_tracks[i] = new_tracks
                     user.save()
       
-
-
-                    
-            
-        
-      
-
-                    
-
-            
-        
-
-            
-
-      
-
-        
-    
-    
 class AppToken:
     @classmethod
     def refresh_token(cls,refresh):
@@ -178,6 +160,44 @@ class AppUserUtils:
             "favourite_artists": favourite_artists,
             "favourite_tracks": favourite_tracks,
         }
+    #returns song recommendations based on user's favourite genres and artists
+    @classmethod
+    def get_track_recommendations(cls, user):
+        access_token = SpotifyAuth.get_valid_access_token(user)
+        headers = {"Authorization": f"Bearer {access_token}"}
+        seed_genres = user.favourite_genres[:5]
+        seed_artists = [artist[0] for artist in user.favourite_artists[:5]]
+        params = {
+            "seed_genres": ",".join(seed_genres),
+            "seed_artists": ",".join(seed_artists),
+            "limit": 20,
+            
+        }
+        
+        response = requests.get("https://api.spotify.com/v1/recommendations", headers=headers, params=params)
+        if response.status_code != 200:
+            print(response)
+            raise Exception("Failed to fetch song recommendations")
+        recommendations = []
+        for track in response.json().get('tracks', []):
+            recommendations.append({
+                "name": track['name'],
+                "artist": track['artists'][0]['name'],
+                "album_image": track['album']['images'][0]['url']
+            })
+        return recommendations
+    
+    
+
+        
+        
+        
+        
+        
+       
+
+
+
     
 
 
