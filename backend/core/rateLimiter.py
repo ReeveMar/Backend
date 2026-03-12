@@ -1,7 +1,7 @@
 import time
 import redis
 from django.http import JsonResponse
-
+from decouple import config
 
 # Rate Limiting Middleware
 class RateLimitMiddleware:
@@ -9,7 +9,8 @@ class RateLimitMiddleware:
     WINDOW = 60  # seconds
     def __init__(self, get_response):
         self.get_response = get_response
-        self.redis = redis.Redis(host="localhost", port=6379, db=0)
+        redis_url = config('REDIS_URL', default='redis://localhost:6379/0')
+        self.redis = redis.from_url(redis_url)
 
 
     def __call__(self, request):

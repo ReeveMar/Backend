@@ -144,9 +144,19 @@ class SpotifyAuth:
 class AppToken:
     @classmethod
     def refresh_token(cls,refresh):
-         response=redirect("http://localhost:5173/")
-         response.set_cookie("refresh", str(refresh), httponly=True,secure=True,samesite='None',max_age=60*60*24*30)
-         response.set_cookie("access", str(refresh.access_token), httponly=True,secure=True,samesite='None',max_age=60*15)
+         response=redirect(settings.FRONTEND_URL)
+         
+         samesite_setting = getattr(settings, 'JWT_COOKIE_SAMESITE', 'None')
+         secure_setting = getattr(settings, 'JWT_COOKIE_SECURE', True)
+         
+         response.set_cookie(
+             "refresh", str(refresh), 
+             httponly=True, secure=secure_setting, samesite=samesite_setting, max_age=60*60*24*30
+         )
+         response.set_cookie(
+             "access", str(refresh.access_token), 
+             httponly=True, secure=secure_setting, samesite=samesite_setting, max_age=60*15
+         )
          return response
 
 class AppUserUtils:

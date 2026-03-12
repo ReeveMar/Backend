@@ -1,10 +1,13 @@
-
+import os
 from pathlib import Path
 from decouple import config
+import dj_database_url
 # Load environment variables from .env file
 SPOTIFY_CLIENT_ID = config('CLIENT_ID')
 SPOTIFY_CLIENT_SECRET = config('CLIENT_SECRET')
 SPOTIFY_REDIRECT_URI = config('REDIRECT_URI')
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000').rstrip('/')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -13,12 +16,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-z@_nma1+b^82k8s21&vaz=g)__h#rjctgqc-4e&bh=w1xn-)p$'
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+# Dynamically parse ALLOWED_HOSTS from a comma-separated string
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
 
 
 # Application definition
@@ -35,6 +39,9 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     "corsheaders",
+    'django_extensions',
+
+   
 ]
 # settings.py
 
@@ -51,11 +58,11 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "simple",
-            "level": "DEBUG",
+            "level": "INFO" if not DEBUG else "DEBUG",
         },
         "debug_file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "debug.log",  # adjust path and permissions
+            "filename": "debug.log",
             "maxBytes": 10 * 1024 * 1024,
             "backupCount": 5,
             "formatter": "verbose",
@@ -63,15 +70,21 @@ LOGGING = {
         },
     },
     "loggers": {
-        # Django internals and request handling
-        "django": {"handlers": ["console", "debug_file"], "level": "INFO", "propagate": True},
+        "django": {
+            "handlers": ["console"] if not DEBUG else ["console", "debug_file"],
+            "level": "INFO", 
+            "propagate": True
+        },
         "django.request": {
-            "handlers": ["console", "debug_file"],
-            "level": "DEBUG",
+            "handlers": ["console"] if not DEBUG else ["console", "debug_file"],
+            "level": "WARNING" if not DEBUG else "DEBUG",
             "propagate": False,
         },
-        # Your application namespace
-        "myapp": {"handlers": ["console", "debug_file"], "level": "DEBUG", "propagate": False},
+        "myapp": {
+            "handlers": ["console"] if not DEBUG else ["console", "debug_file"], 
+            "level": "INFO" if not DEBUG else "DEBUG", 
+            "propagate": False
+        },
     },
 }
 
@@ -79,6 +92,7 @@ LOGGING = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     "corsheaders.middleware.CorsMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -91,12 +105,23 @@ MIDDLEWARE = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
+    FRONTEND_URL,
 ]
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
+    FRONTEND_URL,
 ]
-SESSION_COOKIE_SAMESITE = 'Lax'   
+
+# Set basic Session & CSRF cookie policies globally
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Custom JWT Cookie Settings
+JWT_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+JWT_COOKIE_SECURE = not DEBUG   
+
+
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -122,11 +147,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=config('DATABASE_URL')
+    )
 }
+
 
 
 
@@ -147,6 +172,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Simplifies static file serving in production
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
