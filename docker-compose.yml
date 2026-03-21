@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+
+  # Redis Service (required for rate limiting)
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+      
+  # Django Backend Service
+  backend:
+    build: .
+    # Pass local directory to the container to see changes instantly
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    # Load environment variables explicitly but override database/redis to use local containers
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+      - REDIS_URL=redis://redis:6379/1
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - DEBUG=True  # Helpful for local testing via docker-compose
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
